@@ -54,16 +54,12 @@ Run_TH = 2; % running speed threshold is 1 cm/s to be used like this: ..., 'run'
 clear SelectedResponses
 
 SelectedResponses = DataSelector(ProjectData,AM_UnitResponses_smooth,AM_Param,AM_Speed(:,:,1:end-1),Units_Sel);%,'run',Run_TH);
-<<<<<<< HEAD
 % SelectedResponses1 = DataSelector1(ProjectData,AM_UnitResponses_smooth,AM_Param,AM_Speed(:,:,1:end-1),Units_Sel);%,'run',Run_TH);
 % SelectedResponses = DataSelector(ProjectData,AM_UnitResponses_smooth,AM_Param,AM_Speed(:,:,1:end-1),Units_Sel,'run',Run_TH);
-% =======
 % SelectedResponses = DataSelector(ProjectData,AM_UnitResponses_smooth,AM_Param,AM_Speed(:,:,1:end-1),Units_Sel,'run',Run_TH);
-% >>>>>>> parent of 1ecc6aa (lasta updates)
+
 % % output contains a cell with matrices containing the trial mean responses 
-=======
 % output contains a cell with matrices containing the trial mean responses 
->>>>>>> parent of 10d3eee (updates)
 % of units with their relevant "control" responses: e.g. if we want to look 
 % at the responses during perturbation while the mouse runs for any grating 
 % direction, SelectedResponses will be a cell with:
@@ -80,7 +76,6 @@ SelectedResponses = DataSelector(ProjectData,AM_UnitResponses_smooth,AM_Param,AM
 %         PlotResponses(ProjectData,SelResponse,AM_Param,AM_Speed,Units_Sel,0);
 %     end
 % else
-<<<<<<< HEAD
 
   
 
@@ -131,10 +126,8 @@ SelectedResponses = DataSelector(ProjectData,AM_UnitResponses_smooth,AM_Param,AM
 %   end
   
   
-=======
-  PlotResponses(ProjectData,SelectedResponses,AM_Param,AM_Speed,Units_Sel,0);
+%  PlotResponses(ProjectData,SelectedResponses,AM_Param,AM_Speed,Units_Sel,0);
 
->>>>>>> parent of 10d3eee (updates)
   %PlotResponsesRunStill(ProjectData,{SelectedResponses{1,1}(PertRespUnits_pos,:) SelectedResponses{1,2}(PertRespUnits_pos,:)} ,AM_Param,AM_Speed,Units_Sel,0,1)
 % end
         

@@ -369,7 +369,7 @@ plotexamples = 0;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Units to plot
 % 90 111 240 224
-Unit_2_plot = 111;
+Unit_2_plot = 224;
 UI_idx = 1;
 while UI_idx<=size(AUC_shuffled,1)
     Target(UI_idx) = find(I==UI_idx) == Unit_2_plot;

@@ -284,11 +284,11 @@ Mean_FR_ = Mean_FR(AM_UOI);
 figure
 plot(Mean_FR_(cl_id==1),Spike_Dur(cl_id==1),'b.')
 hold on
-plot(Mean_FR_(cl_id==3),Spike_Dur(cl_id==3),'r.')
+plot(Mean_FR_(cl_id==2),Spike_Dur(cl_id==2),'r.')
 
 edges = linspace(0,1.4,30); clear Distr;
 Distr(1,:) = histcounts(Spike_Dur(cl_id==1),edges);
-Distr(2,:) = histcounts(Spike_Dur(cl_id==3),edges);
+Distr(2,:) = histcounts(Spike_Dur(cl_id==2),edges);
 figure
 x_axis = edges(1:end-1)+mean(diff(edges));
 stairs(x_axis,Distr(1,:),'k')
@@ -391,7 +391,7 @@ end
 
 %% plot mean waveforms for the two main groups to show difference
 Cluster1 = 1;
-Cluster2 = 3;
+Cluster2 = 2;
 MeanWaveforms_OI = MeanWaveforms(AM_UOI,:);
 MeanWaveforms_OI = ((MeanWaveforms_OI'-min(MeanWaveforms_OI'))./(max(MeanWaveforms_OI')-min(MeanWaveforms_OI')))';
 figure

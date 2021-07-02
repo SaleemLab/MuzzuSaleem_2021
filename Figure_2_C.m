@@ -1,10 +1,11 @@
  %% Tomaso Muzzu - 09/03/2020 - UCL - Figure 3C
 
 %% Functions to plot Figure 2 - direction tuning
+%% 1) load all data
+%% Functions to plot Figure 2 - direction tuning
 if ~exist('ProjectData','var')
-    [ProjectData AM_UnitResponses AM_Param AM_Speed AM_UOI SelectedResponses AM_UnitResponses_smooth] = LoadDataALL;
+    [ProjectData AM_UnitResponses AM_Param AM_Speed AM_UOI SelectedResponses AM_UnitResponses_smooth AM_EyeTracking] = LoadDataALL;
 end
-
 %% direction
 if size(AM_UOI,2)==1
     SelectedCells = AM_UOI;
@@ -19,18 +20,19 @@ BonvisionFR = 60; %Hz
 trialSide_samples = 60;
 trialSide_seconds = 1;
 
-
 %%
-% first 7 animals
-if  size(ProjectData,1)>10
+p_value = 95;
+
+%% first 7 animals
+thres = 95;
+if  size(ProjectData,1)==37
     CTRL_exp = 0;
     Animal_1st_idx = [1 5 7 12 15 24 31];
-    
     if ~exist('PertResp_units','var')
         % select only perturbation responsive units
         load('AUC_shuffled.mat')
         Sh_responses = AUC_shuffled(:,2:end);
-        p_pert_th = prctile(Sh_responses(:),99);
+        p_pert_th = prctile(Sh_responses(:),thres);
         PertResp_units = (AUC_shuffled(:,1)>p_pert_th);
         % select only pos. modulated perturbation responsive units
         load('DM_pert_shuffled.mat')
@@ -41,15 +43,14 @@ if  size(ProjectData,1)>10
         PertRespUnits_pos = PertResp_units & DM_sign_i(:,1);
         PertRespUnits_neg = PertResp_units & DM_sign_i(:,2);
     end
-    
-else
+elseif size(ProjectData,1)==10
     CTRL_exp = 1;
     % naive animals
     Animal_1st_idx = [1 4 7];
     % select only perturbation responsive units
     load('AUC_shuffled_CTRL_1.mat')
     Sh_responses = AUC_shuffled(:,2:end);
-    p_pert_th = prctile(Sh_responses(:),99);
+    p_pert_th = prctile(Sh_responses(:),thres);
     PertResp_units = (AUC_shuffled(:,1)>p_pert_th);
     % select only pos. modulated perturbation responsive units
     load('DM_pert_shuffled_CTRL.mat')
@@ -59,8 +60,25 @@ else
     % select only pos. modulated perturbation responsive units
     PertRespUnits_pos = PertResp_units & DM_sign_i(:,1);
     PertRespUnits_neg = PertResp_units & DM_sign_i(:,2);
+else
+    % select only perturbation responsive units
+    load('AUC_shuffled_CTRL_1.mat')
+    AUC_shuffled_CTRL = AUC_shuffled;
+    AUC_shuffled_pp_CTRL = AUC_shuffled_pp;
+    load('AUC_shuffled.mat')
+    AUC_shuffled = cat(1,AUC_shuffled,AUC_shuffled_CTRL);
+    AUC_shuffled_pp = cat(1,AUC_shuffled_pp,AUC_shuffled_pp_CTRL);
+    Sh_responses = AUC_shuffled(:,2:end);
+    p_pert_th = prctile(Sh_responses(:),thres);
+    PertResp_units = (AUC_shuffled(:,1)>p_pert_th);
+    % select only pos. modulated perturbation responsive units
+    load('DM_ALL.mat')
+    DM_sign_i(:,1) = DM>0;
+    DM_sign_i(:,2) = DM<=0;
+    % select only pos. modulated perturbation responsive units
+    PertRespUnits_pos = PertResp_units & DM_sign_i(:,1);
+    PertRespUnits_neg = PertResp_units & DM_sign_i(:,2);
 end
-
 %%
 % AM_Param :
 % conditions = 1 --> nr of recording
@@ -390,7 +408,7 @@ TuningProps = table(Pref_Dir,OSI,DSI,L_ori,P_ori,L_dir,P_dir);
 
 %% Units to plot
 % 90 111 240 224
-Unit_2_plot = 111;
+Unit_2_plot = 224;
 UI_idx = 1;
 while UI_idx<=830
     Target(UI_idx) = find(I==UI_idx) == Unit_2_plot;

@@ -95,8 +95,330 @@ else
     PertRespUnits_neg = PertResp_units & DM_sign_i(:,2);
 end
 
+
+%% trial by trial
+
+% initialise gaussian filter parameters for smoothing running speed
+BonvisionFR = 60;
+GaussFilter_W = 0.3; % seconds
+Width = round(GaussFilter_W*BonvisionFR);
+Sigma = Width/3; % standard deviation in number of samples (converted from time in seconds)
+x_g = linspace(-Width/2, Width/2, Width);
+gaussFilter = exp(-x_g.^2/(2*Sigma^2));
+gaussFilter_ = gaussFilter / sum (gaussFilter); % normalize
+
+Param = AM_Param(:,AM_UOI,:);
+PertOnsets = Param(:,:,4); 
+PertOffsets = Param(:,:,5);
+pert_per(1) = round(max(PertOnsets(:))*60+60);
+pert_per(2) = round(max(PertOffsets(:))*60+60);
+AM_Speed_OI = AM_Speed(:,AM_UOI,:);
+AM_UnitResponses_smooth_OI = AM_UnitResponses_smooth(:,AM_UOI,:);
+clear R_sq Coeff_pvalue
+parfor cell_oi = 1:length(DM)
+    % Predictors
+    Predictor_TF = squeeze(Param(~isnan(Param(:,cell_oi,1)),cell_oi,3));
+    Predictor_Ori = mod(squeeze(Param(~isnan(Param(:,cell_oi,1)),cell_oi,2)),180);
+    
+    AM_Speed_OI_u = squeeze(AM_Speed_OI(~isnan(AM_Speed_OI(:,cell_oi,1)),cell_oi,:));
+    %conv(AM_Speed_OI_u',gaussFilter_,'same');
+    Predictor_speed = nanmean(AM_Speed_OI_u(:,pert_per(1):pert_per(2)),2)>2;
+    
+    % Predicted
+    AM_UnitResponses_smooth_OI_u = squeeze(AM_UnitResponses_smooth_OI(~isnan(AM_UnitResponses_smooth_OI(:,cell_oi,1)),cell_oi,:));
+    AM_UnitResponses_smooth_OI_u = AM_UnitResponses_smooth_OI_u/max(AM_UnitResponses_smooth_OI_u(:));
+    Response_TBP = nansum(AM_UnitResponses_smooth_OI_u(:,pert_per(1):pert_per(2)),2);
+    
+    % select equal # of trials for pert-nopert conditions
+    Trials_nopert = find(Predictor_TF==0);
+    Trials_nopert_sel = Trials_nopert(randperm(length(Trials_nopert)));
+    Trials_pert = find(Predictor_TF==1);
+    trial_i = [Trials_pert; Trials_nopert_sel(1:length(Trials_pert))];
+    %trial_i = trial_i(randperm(length(trial_i)));
+    
+    X = [Predictor_TF Predictor_Ori Predictor_speed Response_TBP];
+    X = X(trial_i,:);
+    
+    for comb_i = 1:4
+        % without interactions
+        [trainedModel, validationRMSE] = trainRegressionModel(X,comb_i);
+        R_sq(cell_oi,comb_i) = trainedModel.LinearModel.Rsquared.Adjusted;
+        if comb_i == 4
+            Coeff_pvalue(cell_oi,:) = trainedModel.LinearModel.Coefficients.pValue;  
+        end
+        %trainedModel.LinearModel.Rsquared.Adjusted
+        % with interactions
+%         [trainedModel1, validationRMSE1] = trainRegressionModel_comb(X,comb_i);
+%         R_sq_c(cell_oi,comb_i) = trainedModel1.LinearModel.Rsquared.Adjusted;
+%         if comb_i == 4
+%             Coeff_pvalue_c(cell_oi,:) = trainedModel1.LinearModel.Coefficients.pValue;  
+%         end
+    end
+    
+    cell_oi
+    
+end
+
+% plot ratios of explained variance for models using the following
+% parameters:
+% no combinations: no TF, no Ori, no Speed, altogether
+% with combinations: no TF, no Ori, no Speed, altogether
+% stat sign of parameters above: 
+% no TF, no Ori, no Speed, no TF & no Ori, no TF & no Speed, no Ori & no Speed
+% with combinations/interactions between the terms above
+R_sq(R_sq<0) = nan;
+%R_sq_c(R_sq_c<0) = nan;
+R_sq_norm = R_sq./R_sq(:,4);
+Coeff_pvalue_logic = Coeff_pvalue<0.05;
+% R_sq_norm_c = R_sq_c./R_sq_c(:,4);
+% Coeff_pvalue_c_logic = Coeff_pvalue_c<0.05;
+datanames = {'no TF', 'no ori.', 'no speed', 'full model'};
+hist_cols = {'r','g','b'};
+%% look only at w/o interaction parameters
+%% plot summary figure
+figure
+nr_col = 3;
+for cp = 1:nr_col
+    subplot(1,5,cp)
+    histogram(log(R_sq_norm(:,cp)),-4:0.2:4,'FaceColor',[0.5 0.5 0.5],'FaceAlpha',0.6)
+    hold on
+    histogram(log(R_sq_norm(Coeff_pvalue_logic(:,cp+1),cp)),-4:0.2:4,'FaceColor',hist_cols{cp},'FaceAlpha',0.6)
+    legend({'all units n=1019', ['p<0.05 n=' num2str(sum(Coeff_pvalue_logic(:,cp+1)))]},'Location','northwest')
+    legend boxoff 
+    xlabel(['log (' datanames{cp} '/full)']); ylabel('Units')
+    set(gca,'box','off','TickDir','out')
+    title(datanames{cp})
+end
+% boxplots
+subplot(1,5,4)
+boxplot(log(R_sq_norm(:,1:end-1)),datanames(1:3),'Notch','on','orientation','vertical','outliersize',0.1)
+h = findobj(gca,'Tag','Box');
+bp_cols = flip(cat(2,hist_cols,'k'));
+for j=1:3
+    patch(get(h(j),'XData'),get(h(j),'YData'),'k','FaceAlpha',.6);
+end
+ylim([-3.5 2]); grid on
+ylabel('log ratio of expl. var.'); title('w/o interactions (all units)')
+set(gca,'box','off','TickDir','out')
+% venn diagrams
+subplot(1,5,5)
+all_n = sum(cat(2,Coeff_pvalue_logic(:,2:end), ...
+            Coeff_pvalue_logic(:,2) & Coeff_pvalue_logic(:,3), ...
+            Coeff_pvalue_logic(:,2) & Coeff_pvalue_logic(:,4), ...
+            Coeff_pvalue_logic(:,3) & Coeff_pvalue_logic(:,4), ...
+            Coeff_pvalue_logic(:,2) & Coeff_pvalue_logic(:,3) & Coeff_pvalue_logic(:,4)));
+[H,S] = venn(all_n, 'FaceColor',{'r','g','b'},'FaceAlpha',{0.6,0.6,0.6},'EdgeColor','none')
+for i = 1:7
+    text(S.ZoneCentroid(i,1), S.ZoneCentroid(i,2), num2str(all_n(i)))
+end
+legend(datanames(1:3),'Location','northwest'); legend boxoff
+set(gca,'box','off','TickDir','out','visible','off')
+axis equal, axis off
+
+p_vals = [signrank(log(R_sq_norm(:,1))) signrank(log(R_sq_norm(:,2))) signrank(log(R_sq_norm(:,3)))]
+p_vels = [ranksum((log(R_sq_norm(:,1))),(log(R_sq_norm(:,2)))) ...
+          ranksum((log(R_sq_norm(:,1))),(log(R_sq_norm(:,3)))) ...
+          ranksum((log(R_sq_norm(:,2))),(log(R_sq_norm(:,3))))];
+
+% check how well the TF and running state can predict the variables
+
+nanmedian(R_sq(Coeff_pvalue_logic(:,2),4)) % any TF
+nanmedian(R_sq(Coeff_pvalue_logic(:,4),4)) % any running
+nanmean(R_sq(Coeff_pvalue_logic(:,2) & ~Coeff_pvalue_logic(:,4),4)) % just TF & ori
+nanmean(R_sq(Coeff_pvalue_logic(:,4) & ~Coeff_pvalue_logic(:,2),4)) % just running & ori
+      
+%% plot only the values of explained variance
+figure
+nr_col = 3;
+for cp = 1:nr_col
+    subplot(1,5,cp)
+    histogram((R_sq(:,cp)),0:0.02:1,'FaceColor',[0.5 0.5 0.5],'FaceAlpha',0.6)
+    hold on
+    histogram((R_sq(Coeff_pvalue_logic(:,cp+1),cp)),0:0.02:1,'FaceColor',hist_cols{cp},'FaceAlpha',0.6)
+    legend({'all units n=1019', ['p<0.05 n=' num2str(sum(Coeff_pvalue_logic(:,cp+1)))]},'Location','northwest')
+    legend boxoff 
+    xlabel('Explained variance'); ylabel('Units')
+    set(gca,'box','off','TickDir','out')
+    title(datanames{cp})
+end
+cp = 4;
+subplot(1,5,cp)
+histogram((R_sq(:,cp)),0:0.02:1,'FaceColor',[0.5 0.5 0.5],'FaceAlpha',0.6)
+% hold on
+% histogram((R_sq(Coeff_pvalue_logic(:,cp+1),cp)),0:0.02:1,'FaceColor',hist_cols{cp},'FaceAlpha',0.6)
+legend({'all units n=1019'},'Location','northwest')
+legend boxoff
+xlabel('Explained variance'); ylabel('Units')
+set(gca,'box','off','TickDir','out')
+title(datanames{cp})
+nanmean(R_sq(:,cp))
+nanstd(R_sq(:,cp))/sqrt(length(R_sq(:,cp)))
+nanmedian(R_sq(:,cp))
+
+
+
+%% plot summary figure
+figure
+nr_col = 3;
+for cp = 1:nr_col
+    subplot(2,5,cp)
+    histogram(R_sq_norm(:,cp),-0.5:0.05:2,'FaceColor',[0.5 0.5 0.5],'FaceAlpha',0.6)
+    hold on
+    histogram(R_sq_norm(Coeff_pvalue_logic(:,cp+1),cp),-0.5:0.05:2,'FaceColor',hist_cols{cp},'FaceAlpha',0.6)
+    legend({'all units n=1019', ['p<0.05 n=' num2str(sum(Coeff_pvalue_logic(:,cp+1)))]},'Location','northwest')
+    legend boxoff 
+    set(gca,'box','off','TickDir','out')
+    title(datanames{cp})
+    subplot(2,5,nr_col+2+cp)
+    histogram(R_sq_norm_c(:,cp),-0.5:0.05:2,'FaceColor',[0.5 0.5 0.5],'FaceAlpha',0.6)
+    hold on
+    histogram(R_sq_norm_c(Coeff_pvalue_c_logic(:,cp+1),cp),-0.5:0.05:2,'FaceColor',hist_cols{cp},'FaceAlpha',0.6)
+    xlabel('ratio of expl. var.')
+    legend({'all units n=1019', ['p<0.05 n=' num2str(sum(Coeff_pvalue_c_logic(:,cp+1)))]},'Location','northwest')
+    legend boxoff 
+    set(gca,'box','off','TickDir','out')
+end
+% boxplots
+subplot(2,5,4)
+boxplot(cat(2,R_sq_norm(:,1:end-1), R_sq(:,4)./R_sq_c(:,4)),cat(2,datanames(1:3),'without/with'),'Notch','on','orientation','vertical','outliersize',0.1)
+h = findobj(gca,'Tag','Box');
+bp_cols = flip(cat(2,hist_cols,'k'));
+for j=1:4
+    patch(get(h(j),'XData'),get(h(j),'YData'),'k','FaceAlpha',.6);
+end
+ylim([-1 2.5]); grid on
+ylabel('ratio of expl. var.'); title('w/o interactions (all units)')
+set(gca,'box','off','TickDir','out')
+subplot(2,5,9)
+boxplot(cat(2,R_sq_norm_c(:,1:end-1), R_sq_c(:,4)./R_sq(:,4)),cat(2,datanames(1:3),'with/without'),'Notch','on','orientation','vertical','outliersize',0.1)
+h = findobj(gca,'Tag','Box');
+for j=1:4
+    patch(get(h(j),'XData'),get(h(j),'YData'),'k','FaceAlpha',.6);
+end
+ylim([-1 2.5]); grid on
+ylabel('ratio of expl. var.'); title('with interactions (all units)')
+set(gca,'box','off','TickDir','out')
+% venn diagrams
+subplot(2,5,5)
+all_n = sum(cat(2,Coeff_pvalue_logic(:,2:end), ...
+            Coeff_pvalue_logic(:,2) & Coeff_pvalue_logic(:,3), ...
+            Coeff_pvalue_logic(:,2) & Coeff_pvalue_logic(:,4), ...
+            Coeff_pvalue_logic(:,3) & Coeff_pvalue_logic(:,4), ...
+            Coeff_pvalue_logic(:,2) & Coeff_pvalue_logic(:,3) & Coeff_pvalue_logic(:,4)));
+[H,S] = venn(all_n, 'FaceColor',{'r','g','b'},'FaceAlpha',{0.6,0.6,0.6},'EdgeColor','none')
+for i = 1:7
+    text(S.ZoneCentroid(i,1), S.ZoneCentroid(i,2), num2str(all_n(i)))
+end
+legend(datanames(1:3),'Location','northwest'); legend boxoff
+set(gca,'box','off','TickDir','out','visible','off')
+axis equal, axis off
+subplot(2,5,10)
+all_n = sum(cat(2,Coeff_pvalue_c_logic(:,2:4), ...
+            Coeff_pvalue_c_logic(:,2) & Coeff_pvalue_c_logic(:,3), ...
+            Coeff_pvalue_c_logic(:,2) & Coeff_pvalue_c_logic(:,4), ...
+            Coeff_pvalue_c_logic(:,3) & Coeff_pvalue_c_logic(:,4), ...
+            Coeff_pvalue_c_logic(:,2) & Coeff_pvalue_c_logic(:,3) & Coeff_pvalue_c_logic(:,4)));
+[H,S] = venn(all_n, 'FaceColor',{'r','g','b'},'FaceAlpha',{0.6,0.6,0.6},'EdgeColor','none');
+for i = 1:7
+    text(S.ZoneCentroid(i,1), S.ZoneCentroid(i,2), num2str(all_n(i)))
+end
+legend(datanames(1:3),'Location','northwest'); legend boxoff
+set(gca,'box','off','TickDir','out','visible','off')
+axis equal, axis off
+
+%%
+
+
+nanmean(log(R_sq(:,4)./R_sq_c(:,4)))
+
+
+%%
+
+R_sq_pos = R_sq(PertResp_units,:);
+R_sq_pos = R_sq_pos./R_sq_pos(:,4);
+
+R_sq_rest = R_sq(~PertResp_units,:);
+R_sq_rest = R_sq_rest./R_sq_rest(:,4);
+
+datanames = {'no TF', 'no direction', 'no speed'};
+figure
+for ct = 1:3
+    subplot(3,1,ct)
+    histogram(R_sq_pos(:,ct),-0.5:0.05:2)
+    legend(datanames{ct})
+end
+figure
+boxplot(R_sq_pos,'Notch','on')
+ylim([-0.5 2])
+
+R_sq_norm = R_sq./R_sq(:,4);
+figure
+for ct = 1:3
+    subplot(3,1,ct)
+    histogram(R_sq_norm(:,ct),-0.5:0.05:2)
+    legend(datanames{ct})
+end
+figure
+boxplot(R_sq_norm,'Notch','on')
+ylim([-0.5 2])
+
+
+% look at units whose TF coeff is significant
+ci = 3;
+%R_sq_sign = R_sq(Coeff_pvalue(:,ci+1)<0.05 & Coeff_pvalue(:,ci+2)<0.05,:)
+R_sq_sign = R_sq(Coeff_pvalue(:,ci+1)<0.05,:);
+R_sq_sign = R_sq_sign./R_sq_sign(:,4);
+
+datanames = {'no TF', 'no orientation', 'no speed','full model'};
+coeffnames = {'TF', 'Ori', 'Speed'};
+figure
+suptitle([coeffnames{ci} ' coeff p<0.05, n=' num2str(size(R_sq_sign,1))])
+rows=3;
+for ct = 1:rows
+    subplot(rows,1,ct)
+    histogram(R_sq_sign(:,ct),-0.5:0.05:2)
+    legend(datanames{ct})
+end
+
+% plot explained variance
+ci = 1;
+R_sq_sign = R_sq(Coeff_pvalue(:,ci+1)<0.05,:);
+figure
+suptitle([coeffnames{ci} ' coeff p<0.05, n=' num2str(size(R_sq_sign,1))])
+rows=4;
+for ct = 1:rows
+    subplot(rows,1,ct)
+    histogram(R_sq_sign(:,ct),-0.5:0.02:1)
+    legend(datanames{ct})
+end
+
+
+
+[m  cell_oi] = min(abs(R_sq(:,2)-0.7109))
+
+AUC_shuffled(cell_oi,1)
+DM(cell_oi)
+
+%% example unit
+SessionTrialType = Param(:,cell_oi,3); SessionTrialType = SessionTrialType(~isnan(SessionTrialType));
+figure
+subplot(4,1,1)
+plot(linspace(-1,8.33,size(UnitResponses_smooth,3)), nanmean(squeeze(UnitResponses_smooth(SessionTrialType==1,cell_oi,:))) ,'r')
+hold on
+plot(linspace(-1,8.33,size(UnitResponses_smooth,3)), nanmean(squeeze(UnitResponses_smooth(SessionTrialType==0,cell_oi,:))) ,'k')
+subplot(4,1,2:4)
+[B,Ir] = sort(nanmean(squeeze(UnitResponses_smooth(1:length(SessionTrialType),cell_oi,pert_per(1):pert_per(2)))'),'descend');
+imagesc(linspace(-1,8.33,size(UnitResponses_smooth,3)),1:length(SessionTrialType),squeeze(UnitResponses_smooth(Ir,cell_oi,:)))
+hold on
+imagesc(-1:0,1:length(SessionTrialType),repmat(SessionTrialType(Ir),1,2));
+
+
+
+
+
+
 %% 2) scan through all experiments
-% initialise gaussian filter parameters for firing rate
+% initialise gaussian filter parameters for smoothing running speed
 BonvisionFR = 60;
 GaussFilter_W = 0.3; % seconds
 Width = round(GaussFilter_W*BonvisionFR);
@@ -131,13 +453,13 @@ for rec = 1:size(ProjectData,1)
     
     %%%%%%%%%%%%%%%%%% 4) run regression
     
-    for Stim_i = 1:max(StimToUse)
-        
-        [res, varList, meanSubResp_Used] = RidgeRegressionModelMain_SL(ES, Response(21,:),TrialToUse,Stim_i,plotoption); % optional: BestBeta
-        
-        RES_n{rec,Stim_i} = res;
-        
-    end
+%     for Stim_i = 1:max(StimToUse)
+%         
+%         [res, varList, meanSubResp_Used] = RidgeRegressionModelMain_SL(ES, Response(21,:),TrialToUse,Stim_i,plotoption); % optional: BestBeta
+%         
+%         RES_n{rec,Stim_i} = res;
+%         
+%     end
     
 %     VarExplained = [[] ; VarExplained_temp];
     
@@ -232,7 +554,6 @@ PertOnsets = Param(:,:,4);
 PertOffsets = Param(:,:,5);
 pert_per(1) = round(max(PertOnsets(:))*60+60);
 pert_per(2) = round(max(PertOffsets(:))*60+60);
-cell_oi = find(AUC_shuffled(:,1)==max(AUC_shuffled(:,1)));
 SessionTrialType = Param(:,cell_oi,3); SessionTrialType = SessionTrialType(~isnan(SessionTrialType));
 figure
 subplot(4,1,1)
@@ -240,52 +561,38 @@ plot(linspace(-1,8.33,size(UnitResponses_smooth,3)), nanmean(squeeze(UnitRespons
 hold on
 plot(linspace(-1,8.33,size(UnitResponses_smooth,3)), nanmean(squeeze(UnitResponses_smooth(SessionTrialType==0,cell_oi,:))) ,'k')
 subplot(4,1,2:4)
-[B,I] = sort(nanmean(squeeze(UnitResponses_smooth(1:length(SessionTrialType),cell_oi,pert_per(1):pert_per(2)))'),'descend');
-imagesc(linspace(-1,8.33,size(UnitResponses_smooth,3)),1:length(SessionTrialType),squeeze(UnitResponses_smooth(I,cell_oi,:)))
+[B,Ir] = sort(nanmean(squeeze(UnitResponses_smooth(1:length(SessionTrialType),cell_oi,pert_per(1):pert_per(2)))'),'descend');
+imagesc(linspace(-1,8.33,size(UnitResponses_smooth,3)),1:length(SessionTrialType),squeeze(UnitResponses_smooth(Ir,cell_oi,:)))
 hold on
-imagesc(-1:0,1:length(SessionTrialType),repmat(SessionTrialType(I),1,2));
+imagesc(-1:0,1:length(SessionTrialType),repmat(SessionTrialType(Ir),1,2));
+
+%% direction example
+
+%% trial by trial
+
+for cell_oi = 1:size()
+% Predictors
+Predictor_TF = squeeze(Param(~isnan(Param(:,cell_oi,1)),cell_oi,3));
+Predictor_Dir = mod(squeeze(Param(~isnan(Param(:,cell_oi,1)),cell_oi,2)),180); Predictor_Dir(Predictor_Dir==0) = 180; Predictor_Dir = Predictor_Dir/max(Predictor_Dir);
+AM_Speed_OI = AM_Speed(:,AM_UOI,:);
+AM_Speed_OI = squeeze(AM_Speed_OI(~isnan(AM_Speed_OI(:,cell_oi,1)),cell_oi,:));
+Predictor_speed = nanmean(AM_Speed_OI(:,pert_per(1):pert_per(2)),2)
+
+% Predicted
+AM_UnitResponses_smooth_OI = AM_UnitResponses_smooth(:,AM_UOI,:);
+AM_UnitResponses_smooth_OI = squeeze(AM_UnitResponses_smooth_OI(~isnan(AM_UnitResponses_smooth_OI(:,cell_oi,1)),cell_oi,:));
+Response_TBP = nansum(AM_UnitResponses_smooth_OI(:,pert_per(1):pert_per(2)),2);
+
+X = [Predictor_TF Predictor_Dir Predictor_speed Response_TBP];
+
+for comb_i = 1:4
+    [trainedModel, validationRMSE] = trainRegressionModel(X,comb_i);
+    R_sq(comb_i) = trainedModel.LinearModel.Rsquared.Adjusted
+end
+
+
 %%
-ES.TF{1,1}
-ES.MouseSpeed{1,1}
-ES.Orientation{1,1}
-ES.trialStartsEnds{1,1}
-ES.Contrast{1,1}
-trialID_temp = zeros(length(ES.Time{1,1}),1);
-    for tt_i = 1:length(ES.trialStartsEnds{1,1})
-        trialID_temp(ES.trialStartsEnds{1,1}(tt_i,1):ES.trialStartsEnds{1,1}(tt_i,2)) = tt_i;
-    end
-
-Predictor_TF = ES.TF{1,1}/max(ES.TF{1,1});
-Predictor_speed = (ES.MouseSpeed{1,1}-min(ES.MouseSpeed{1,1}))/(max(ES.MouseSpeed{1,1})-min(ES.MouseSpeed{1,1}));
-Predictor_Dir = ES.Orientation{1,1}/max(ES.Orientation{1,1});
-Response_TBP = ((Response(21,:)-min(Response(21,:)))/(max(Response(21,:))-min(Response(21,:))))';
-
-TrialToUse = trialID_temp(ES.PertStartsEnds{1,1}(:,1)); % only perturbation trials
-TrialToUse = 1:length(ES.trialStartsEnds{1,1}); % all of the trials
-tidx = ES.trialID{1}>0 & ismember(ES.trialID{1},TrialToUse) & ES.Contrast{1}>0.78;
-    
-% trying with binning
-nr_bins = 10;
-Predictor_speed = round(Predictor_speed*nr_bins)/nr_bins;
-Response_TBP = round(Response_TBP*nr_bins)/nr_bins;
-
-
-X = [Predictor_TF(tidx) Predictor_speed(tidx) Predictor_Dir(tidx) Response_TBP(tidx)];
-
-    
 
 % let's try the logistic classifier, instead of time, we use trials
-
-Predictor_TF = ES.TF{1,1}/max(ES.TF{1,1});
-Predictor_speed = (ES.MouseSpeed{1,1}-min(ES.MouseSpeed{1,1}))/(max(ES.MouseSpeed{1,1})-min(ES.MouseSpeed{1,1}));
-Predictor_Dir = ES.Orientation{1,1}/max(ES.Orientation{1,1});
-Response_TBP 
-
-figure
-histogram(Response_TBP(Predictor_TF==0),'Color,''r')
-hold on
-histogram(Response_TBP(Predictor_TF==1))
-scatter(Predictor_TF(tidx),Response_TBP(tidx))
-
 
 

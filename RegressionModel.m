@@ -244,8 +244,8 @@ end
 cp = 4;
 subplot(1,5,cp)
 histogram((R_sq(:,cp)),0:0.02:1,'FaceColor',[0.5 0.5 0.5],'FaceAlpha',0.6)
-% hold on
-% histogram((R_sq(Coeff_pvalue_logic(:,cp+1),cp)),0:0.02:1,'FaceColor',hist_cols{cp},'FaceAlpha',0.6)
+%hold on
+%histogram(R_sq(PertResp_units,cp),0:0.02:1,'FaceColor',hist_cols{1},'FaceAlpha',0.6)
 legend({'all units n=1019'},'Location','northwest')
 legend boxoff
 xlabel('Explained variance'); ylabel('Units')
@@ -255,8 +255,63 @@ nanmean(R_sq(:,cp))
 nanstd(R_sq(:,cp))/sqrt(length(R_sq(:,cp)))
 nanmedian(R_sq(:,cp))
 
+% PertResp_units
+figure
+hold on
+histogram(R_sq(PertResp_units,cp),0:0.02:1,'FaceColor',hist_cols{1},'FaceAlpha',0.6)
+histogram((R_sq(~PertResp_units,cp)),0:0.02:1,'FaceColor',[0.5 0.5 0.5],'FaceAlpha',0.6)
+legend({'Pert. resp. Units n=645','Not Pert. resp units n=374'},'Location','northwest')
+legend boxoff
+xlabel('Explained variance'); ylabel('Units')
+set(gca,'box','off','TickDir','out')
+title(datanames{cp})
+nanmean(R_sq(:,cp))
+nanstd(R_sq(:,cp))/sqrt(length(R_sq(:,cp)))
+nanmedian(R_sq(:,cp))
 
+% PertResp_units
+text(0.3,55, 'Pert. Resp. Units')
+text(0.3,50, ['mean±sem = ' num2str(nanmean(R_sq(PertResp_units,cp)),2) '±'  ...
+             num2str(nanstd(R_sq(:,cp))/sqrt(length(R_sq(PertResp_units,cp))),2) ...
+             ', median = ' num2str(nanmedian(R_sq(PertResp_units,cp)),2) ]);
+text(0.3,45, 'Not Pert. Resp. Units')
+text(0.3,40, ['mean±sem = ' num2str(nanmean(R_sq(~PertResp_units,cp)),2) '±'  ...
+             num2str(nanstd(R_sq(~PertResp_units,cp))/sqrt(length(R_sq(~PertResp_units,cp))),2) ...
+             ', median = ' num2str(nanmedian(R_sq(~PertResp_units,cp)),2) ]);
 
+figure
+boxplot(log(R_sq_norm(PertResp_units,1:end-1)),datanames(1:3),'Notch','on','orientation','vertical','outliersize',0.01)
+h = findobj(gca,'Tag','Box');
+bp_cols = flip(cat(2,hist_cols,'k'));
+for j=1:3
+    patch(get(h(j),'XData'),get(h(j),'YData'),'r','FaceAlpha',.6);
+end
+ylim([-3.5 2]); grid on
+ylabel('log ratio of expl. var.'); title('w/o interactions (Pert. Resp. units)')
+set(gca,'box','off','TickDir','out')
+
+p_vals = [signrank(log(R_sq_norm(PertResp_units,1))) signrank(log(R_sq_norm(PertResp_units,2))) signrank(log(R_sq_norm(PertResp_units,3)))]
+p_vels = [ranksum((log(R_sq_norm(PertResp_units,1))),(log(R_sq_norm(PertResp_units,2)))) ...
+          ranksum((log(R_sq_norm(PertResp_units,1))),(log(R_sq_norm(PertResp_units,3)))) ...
+          ranksum((log(R_sq_norm(PertResp_units,2))),(log(R_sq_norm(PertResp_units,3))))];
+
+figure
+boxplot(log(R_sq_norm(~PertResp_units,1:end-1)),datanames(1:3),'Notch','on','orientation','vertical','outliersize',0.01)
+h = findobj(gca,'Tag','Box');
+bp_cols = flip(cat(2,hist_cols,'k'));
+for j=1:3
+    patch(get(h(j),'XData'),get(h(j),'YData'),'k','FaceAlpha',.6);
+end
+ylim([-3.5 2]); grid on
+ylabel('log ratio of expl. var.'); title('w/o interactions (NOT Pert. Resp. units)')
+set(gca,'box','off','TickDir','out')
+
+p_vals = [signrank(log(R_sq_norm(PertResp_units,1))) signrank(log(R_sq_norm(PertResp_units,2))) signrank(log(R_sq_norm(PertResp_units,3)))]
+p_vels = [ranksum((log(R_sq_norm(PertResp_units,1))),(log(R_sq_norm(PertResp_units,2)))) ...
+          ranksum((log(R_sq_norm(PertResp_units,1))),(log(R_sq_norm(PertResp_units,3)))) ...
+          ranksum((log(R_sq_norm(PertResp_units,2))),(log(R_sq_norm(PertResp_units,3))))];
+
+      
 %% plot summary figure
 figure
 nr_col = 3;

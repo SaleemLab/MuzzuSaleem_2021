@@ -312,6 +312,25 @@ p_vels = [ranksum((log(R_sq_norm(PertResp_units,1))),(log(R_sq_norm(PertResp_uni
           ranksum((log(R_sq_norm(PertResp_units,2))),(log(R_sq_norm(PertResp_units,3))))];
 
       
+%% plot orientation units and pert. resp. units
+PertOri_units = ((p_HT2<p_thres) & PertRespUnits_pos');
+figure
+boxplot(log(R_sq_norm(PertOri_units,1:end-1)),datanames(1:3),'Notch','on','orientation','vertical','outliersize',0.01)
+h = findobj(gca,'Tag','Box');
+bp_cols = flip(cat(2,hist_cols,'k'));
+for j=1:3
+    patch(get(h(j),'XData'),get(h(j),'YData'),'r','FaceAlpha',.6);
+end
+ylim([-3.5 2]); grid on
+ylabel('log ratio of expl. var.'); title('Ori tuned & Pert. Resp. units')
+set(gca,'box','off','TickDir','out')
+
+p_vals = [signrank(log(R_sq_norm(PertOri_units,1))) signrank(log(R_sq_norm(PertOri_units,2))) signrank(log(R_sq_norm(PertOri_units,3)))]
+p_vels = [ranksum((log(R_sq_norm(PertOri_units,1))),(log(R_sq_norm(PertOri_units,2)))) ...
+          ranksum((log(R_sq_norm(PertOri_units,1))),(log(R_sq_norm(PertOri_units,3)))) ...
+          ranksum((log(R_sq_norm(PertOri_units,2))),(log(R_sq_norm(PertOri_units,3))))];
+
+      
 %% plot summary figure
 figure
 nr_col = 3;
